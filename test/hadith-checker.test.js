@@ -1,17 +1,21 @@
-// Automated regression suite for the hadith citation DETECTION layer
-// (hadith-checker.js). Zero dependencies, plain Node assertions - run with:
-// node test/hadith-checker.test.js
+// Automated regression suite for the hadith citation engine
+// (hadith-checker.js). Plain Node assertions - run with:
+// node test/hadith-checker.test.js (needs network access for the
+// quoted-phrase section; everything else runs offline).
 //
 // Mirrors checker.test.js's own discipline exactly: one test per format
 // variant, real edge cases, and false-positive guards against text that
 // LOOKS like a hadith citation but isn't - not just happy-path coverage.
 //
-// SCOPE: this file tests DETECTION ONLY (findHadithCitations) and the
-// explicit "not yet available" STUB (checkHadithText). It does not and
-// cannot test existence-check correctness (EXISTS/NOT FOUND/COLLECTION
-// MISMATCH/FABRICATED) - that logic does not exist yet, on purpose, because
-// this project does not have sunnah.com/dorar.net data access yet. See
-// drafts/ground-truth/.lavish/v1-build-plan.html.
+// SCOPE: citation DETECTION (findHadithCitations) is fully tested here.
+// checkHadithText()'s collection+number reference check is still an
+// explicit "not_yet_available" STUB - that requires sunnah.com/dorar.net
+// data access, which this project does not have yet. What IS real and
+// tested here: quoted-phrase verification against hadeethenc.com's public
+// search API (section 6b) - a genuinely different, narrower question ("does
+// this wording exist anywhere") than the still-stubbed one ("is this
+// specifically hadith #N in this collection"). See
+// drafts/ground-truth/.lavish/v1-build-plan.html for the fuller status.
 
 const path = require('path');
 
@@ -23,15 +27,26 @@ const C = window.GroundTruthHadithChecker;
 
 let pass = 0, fail = 0;
 const failures = [];
+const pending = []; // check() queues async work here; run() awaits it all in order at the end
 
+// Async-aware by design: checkHadithText now makes a real network call when
+// a quote is found nearby, so a synchronous try/catch around it would never
+// see a rejected promise. check() always awaits fn() (a plain synchronous
+// fn() resolves immediately, so this costs nothing for the majority of
+// tests that don't touch the network) - queued here rather than awaited
+// immediately at each call site, so a single `node test.js` run stays a
+// flat list of check(...) calls in file order, exactly like every other
+// test file in this project, with the async plumbing isolated to run().
 function check(label, fn) {
-  try {
-    fn();
-    pass++;
-  } catch (e) {
-    fail++;
-    failures.push({ label, error: e.message });
-  }
+  pending.push(async () => {
+    try {
+      await fn();
+      pass++;
+    } catch (e) {
+      fail++;
+      failures.push({ label, error: e.message });
+    }
+  });
 }
 
 function assertEqual(actual, expected, msg) {
@@ -258,28 +273,29 @@ check('a bare number with no collection name anywhere near it is never detected 
 // 6. Existence-check STUB (checkHadithText) - the hard boundary
 // ---------------------------------------------------------------------------
 
-check('checkHadithText never returns a real verdict - status is the explicit "not_yet_available" placeholder', () => {
-  const r = C.checkHadithText('Sahih al-Bukhari 1234 says something.');
+check('checkHadithText never returns a real verdict for the collection+number reference itself - status is the explicit "not_yet_available" placeholder', async () => {
+  const r = await C.checkHadithText('Sahih al-Bukhari 1234 says something.');
   assertEqual(r.length, 1);
   assertEqual(r[0].status, 'not_yet_available');
   assertEqual(r[0].verdict, null);
   if (!/not yet available/i.test(r[0].reason)) throw new Error('expected the reason to explicitly say existence-checking is not yet available, got: ' + r[0].reason);
   if (!/pending/i.test(r[0].reason)) throw new Error('expected the reason to name the pending data-source access, got: ' + r[0].reason);
+  assertEqual(r[0].quoteCheck, undefined, 'no quote was present nearby, so no quoteCheck should be attached at all');
 });
 
 check('HADITH_EXISTENCE_CHECK_IMPLEMENTED is a stable, code-checkable false - not just prose a caller has to parse', () => {
   assertEqual(C.HADITH_EXISTENCE_CHECK_IMPLEMENTED, false);
 });
 
-check('checkHadithText results NEVER carry a "grading" field - the hard boundary, enforced structurally, not just by convention', () => {
-  const r = C.checkHadithText('Sahih Muslim, Book 3, Hadith 45, narrated by Abu Hurairah.');
+check('checkHadithText results NEVER carry a "grading" field - the hard boundary, enforced structurally, not just by convention', async () => {
+  const r = await C.checkHadithText('Sahih Muslim, Book 3, Hadith 45, narrated by Abu Hurairah.');
   assertEqual(r.length, 1);
   if ('grading' in r[0]) throw new Error('a checkHadithText result must never contain a grading field - v1 does not surface hasan/da\'if/sahih grading, full stop');
 });
 
-check('checkHadithText preserves every field findHadithCitations extracted - the stub wraps detection, it does not lose or corrupt it', () => {
+check('checkHadithText preserves every field findHadithCitations extracted - the stub wraps detection, it does not lose or corrupt it', async () => {
   const detected = C.findHadithCitations('Sunan Abu Dawud, Book 3, Hadith 45.')[0];
-  const stubbed = C.checkHadithText('Sunan Abu Dawud, Book 3, Hadith 45.')[0];
+  const stubbed = (await C.checkHadithText('Sunan Abu Dawud, Book 3, Hadith 45.'))[0];
   assertEqual(stubbed.collectionId, detected.collectionId);
   assertEqual(stubbed.collection, detected.collection);
   assertEqual(stubbed.number, detected.number);
@@ -287,9 +303,47 @@ check('checkHadithText preserves every field findHadithCitations extracted - the
   assertEqual(stubbed.raw, detected.raw);
 });
 
-check('checkHadithText on text with no citation returns an empty array, not a placeholder result', () => {
-  const r = C.checkHadithText('This text mentions nothing about hadith at all.');
+check('checkHadithText on text with no citation returns an empty array, not a placeholder result', async () => {
+  const r = await C.checkHadithText('This text mentions nothing about hadith at all.');
   assertEqual(r.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// 6b. Quoted-phrase verification - REAL, live hadeethenc.com calls, no mocks,
+// same discipline as this project's other integration tests (e.g.
+// mcp-server/test.js spawning a real subprocess). A network hiccup can make
+// these flaky in a way the pure-logic tests above never are - that's an
+// accepted, disclosed tradeoff for testing against the real signal instead
+// of a mock that could quietly drift from what the real API actually does.
+// ---------------------------------------------------------------------------
+
+check('a real, famous hadith quote next to a citation gets a scored, sourced verdict from hadeethenc.com', async () => {
+  const r = await C.checkHadithText('The Prophet said: "Actions are but by intentions" - Sahih al-Bukhari 1.');
+  assertEqual(r.length, 1);
+  if (!r[0].quoteCheck) throw new Error('expected a quoteCheck to be attached - a quoted phrase was right there in the text');
+  const qc = r[0].quoteCheck;
+  if (qc.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + qc.reason);
+  if (!['confirmed', 'no_confident_match', 'no_match'].includes(qc.status)) throw new Error('unexpected status: ' + qc.status);
+  if (!/hadeethenc/i.test(qc.source || '')) throw new Error('expected the source to name HadeethEnc, got: ' + qc.source);
+});
+
+check('a deliberately fabricated, absurd quote does not get falsely "confirmed"', async () => {
+  const r = await C.checkHadithText('The Prophet said: "Eat seventeen purple grapes daily for wisdom" - Bukhari 9999.');
+  const qc = r[0].quoteCheck;
+  if (!qc) throw new Error('expected a quoteCheck to be attached');
+  if (qc.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + qc.reason);
+  assertEqual(qc.status !== 'confirmed', true, 'a fabricated quote must never be reported as confirmed, regardless of what loosely-related results the search API happens to surface');
+});
+
+check('a hadith citation with no quoted text nearby gets no quoteCheck at all - never a fabricated verdict on nothing', async () => {
+  const r = await C.checkHadithText('This is discussed in Sahih Muslim, Hadith 45, with no quote given.');
+  assertEqual(r[0].quoteCheck, undefined);
+});
+
+check('verifyQuotedPhrase directly: Arabic quote is detected and searched in Arabic, not English', async () => {
+  const r = await C.verifyQuotedPhrase('إنما الأعمال بالنيات');
+  if (r.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + r.reason);
+  if (!['confirmed', 'no_confident_match', 'no_match'].includes(r.status)) throw new Error('unexpected status: ' + r.status);
 });
 
 // ---------------------------------------------------------------------------
@@ -313,10 +367,10 @@ check('findHadithCitations does not throw at exactly the length limit', () => {
   assertEqual(r.length, 0, 'no citation in a page of x characters, but the call itself must succeed');
 });
 
-check('checkHadithText also throws the same distinct error over the length limit (inherited from findHadithCitations, not silently bypassed)', () => {
+check('checkHadithText also throws the same distinct error over the length limit (inherited from findHadithCitations, not silently bypassed) - now surfaces as a rejected promise, since checkHadithText is async', async () => {
   const tooLong = 'x'.repeat(C.MAX_TEXT_LENGTH + 1);
   let threw = null;
-  try { C.checkHadithText(tooLong); } catch (e) { threw = e; }
+  try { await C.checkHadithText(tooLong); } catch (e) { threw = e; }
   if (!(threw instanceof C.HadithTextTooLongError)) throw new Error('expected checkHadithText to inherit the same size guard, got: ' + (threw && threw.constructor.name));
 });
 
@@ -324,9 +378,12 @@ check('checkHadithText also throws the same distinct error over the length limit
 // Report
 // ---------------------------------------------------------------------------
 
-console.log(`\n${pass} passed, ${fail} failed (${pass + fail} total)`);
-if (failures.length) {
-  console.log('\nFAILURES:');
-  for (const f of failures) console.log(`  - ${f.label}\n      ${f.error}`);
-  process.exit(1);
-}
+(async () => {
+  for (const run of pending) await run();
+  console.log(`\n${pass} passed, ${fail} failed (${pass + fail} total)`);
+  if (failures.length) {
+    console.log('\nFAILURES:');
+    for (const f of failures) console.log(`  - ${f.label}\n      ${f.error}`);
+    process.exit(1);
+  }
+})();

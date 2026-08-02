@@ -1,30 +1,33 @@
-// Hadith citation DETECTION engine. Deliberately separate from checker.js
-// (the Quran engine) - not a refactor of it, a sibling built the same way,
-// so hadith checking can be loaded, tested, and eventually feature-flagged
-// on/off entirely independently of the shipped Quran path. Nothing in
-// checker.js is modified or depended on by this file.
+// Hadith citation engine. Deliberately separate from checker.js (the Quran
+// engine) - not a refactor of it, a sibling built the same way, so hadith
+// checking can be loaded, tested, and eventually feature-flagged on/off
+// entirely independently of the shipped Quran path. Nothing in checker.js
+// is modified or depended on by this file.
 //
 // Depends on window.HADITH_COLLECTIONS being loaded first (see
 // hadith-data.js), exactly the way checker.js depends on window.QURAN_DATA.
 //
 // ---------------------------------------------------------------------------
-// SCOPE, READ THIS FIRST: this file does citation DETECTION ONLY.
+// SCOPE, READ THIS FIRST: two genuinely different questions, two different
+// answers.
 //
-// findHadithCitations() recognizes a hadith citation in text and extracts
-// {collection, number, book, subLetter, narrator} - nothing more. It does
-// NOT know whether the hadith actually exists, whether the number is
-// correct, or whether it's on any fabricated/mawdu list. That requires a
-// real source (sunnah.com for existence, dorar.net for the fabricated
-// cross-reference), and this project does not have access to either yet -
-// outreach was sent, no response as of this writing. See
-// drafts/ground-truth/.lavish/v1-build-plan.html for the current status.
+// "Is this specifically hadith #1234 in this named collection" - NOT
+// answerable yet. findHadithCitations() recognizes a hadith citation and
+// extracts {collection, number, book, subLetter, narrator}, but confirming
+// the specific reference requires sunnah.com's own numbering data, which
+// this project does not have access to yet - outreach was sent, no response
+// as of this writing. checkHadithText() reports this stub result
+// (EXISTENCE_CHECK_STATUS below) for every citation, honestly, never a
+// guessed EXISTS/NOT FOUND verdict on the reference itself.
 //
-// checkHadithText() exists so callers have a stable entry point to code
-// against NOW, without a redesign once real data lands - but every result
-// it returns is an explicit, named "not yet available" placeholder (see
-// EXISTENCE_CHECK_STATUS below), never a guessed EXISTS/NOT FOUND verdict.
-// Guessing would be exactly the kind of unverifiable "trust me" claim this
-// whole project exists to catch (see checker.js's SOURCE-citing discipline).
+// "Does a hadith with THIS WORDING exist anywhere in a real source" - IS
+// answerable, today, when the AI also quoted the hadith's text nearby (in
+// quotation marks). verifyQuotedPhrase() checks that quote against
+// hadeethenc.com's public search API and reports a real, scored verdict -
+// see the section below for the (deliberately conservative) scoring logic
+// and exactly what it can and can't tell you.
+//
+// See drafts/ground-truth/.lavish/v1-build-plan.html for the fuller status.
 // ---------------------------------------------------------------------------
 
 window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
@@ -212,11 +215,13 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
   }
 
   // ---------------------------------------------------------------------
-  // Existence-check STUB. See the file-header boundary note - this never
-  // returns EXISTS/NOT FOUND/COLLECTION MISMATCH/FABRICATED. It exists so
-  // a caller (the MCP server, content.js, popup.js) can be wired against a
-  // stable shape today and only need its data source swapped in later, not
-  // its whole call site redesigned.
+  // Collection+number existence-check: still a STUB. Confirming "does
+  // Bukhari's hadith #1234 specifically exist" requires sunnah.com's own
+  // numbering data, which this project does not have access to yet
+  // (outreach sent, no response as of this writing). Nothing below changes
+  // that - HADITH_EXISTENCE_CHECK_IMPLEMENTED stays false, and no result
+  // this file returns ever claims a specific collection+number reference is
+  // correct or incorrect.
   // ---------------------------------------------------------------------
 
   // A stable, code-checkable boundary marker - not just prose in a message
@@ -226,29 +231,176 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
 
   const EXISTENCE_CHECK_STATUS = 'not_yet_available';
   const EXISTENCE_CHECK_REASON =
-    'Existence-checking not yet available - sunnah.com/dorar.net data source access is pending (outreach sent, no response yet). ' +
-    'This citation was detected but not verified against any source.';
+    'Collection+number existence-checking not yet available - sunnah.com/dorar.net data source access is pending (outreach sent, no response yet). ' +
+    'This citation was detected but its specific reference (e.g. "is this really hadith #1234 in this collection") was not verified against any source.';
 
-  // Deliberately does NOT read or forward any "grading" field - there is no
-  // grading data source wired in at all yet, and per the v1 build plan's
-  // hard boundary, when one is, the code must read past it and explicitly
-  // discard it, never surface it. Every object this returns is asserted, by
-  // construction, to never carry a `grading` key at all (see
-  // hadith-checker.test.js).
-  function checkHadithText(text) {
-    return findHadithCitations(text).map(c => ({
-      ...c,
-      status: EXISTENCE_CHECK_STATUS,
+  // ---------------------------------------------------------------------
+  // Quoted-TEXT verification: real, live, working today - a genuinely
+  // different, narrower question than the stub above. Not "is this the
+  // correct collection+number", but "does a hadith with THIS WORDING exist
+  // anywhere in a real, public hadith source" - the same kind of check
+  // checker.js already does for Quran Arabic text, just against a
+  // phrase-search API instead of an exact-text diff, because no exact-match
+  // corpus is available yet for hadith the way Tanzil's is for Quran.
+  //
+  // Source: hadeethenc.com's public, keyless JSON API (confirmed free, no
+  // auth, no rate-limit wall hit in testing - see
+  // drafts/ground-truth/.lavish/v1-build-plan.html for how this was found
+  // and verified). This is the FIRST live network call this project makes
+  // anywhere - see PRIVACY.md for the honest disclosure of what that means.
+  // ---------------------------------------------------------------------
+
+  const HADEETH_ENC_SOURCE = "HadeethEnc.com (Hadith Encyclopedia)";
+  const HADEETH_ENC_SEARCH_URL = 'https://hadeethenc.com/api/v1/hadeeths/search/';
+
+  // A DELIBERATELY high bar. Empirical testing (see the build plan doc)
+  // showed this search API is a loose keyword match, not phrase search: a
+  // completely fabricated phrase can still surface an unrelated result, and
+  // even a famous, verbatim-real quote's correct match is not reliably
+  // ranked first among the results. Treating "the API returned something"
+  // as confirmation would be exactly the false-confidence failure mode this
+  // whole project exists to catch. Requiring a strong word-overlap match
+  // against the BEST-scoring result (not just the first one) - and
+  // otherwise reporting "no confident match", never a guessed negative - is
+  // the same discipline as checker.js declining to score an English
+  // paraphrase: abstain rather than fabricate precision the underlying
+  // signal doesn't actually have.
+  const PHRASE_MATCH_THRESHOLD = 0.6;
+
+  function normalizeWords(s) {
+    return s
+      .toLowerCase()
+      .replace(/<[^>]*>/g, ' ') // strip the API's own <mark> highlight tags
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ') // punctuation-insensitive, Unicode-aware (Arabic + English)
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  // Fraction of the QUOTED phrase's own words found in the candidate text -
+  // deliberately asymmetric (not a generic Jaccard/union ratio): a long
+  // candidate hadith containing every word of a short quoted excerpt should
+  // score high, even though the candidate itself has many additional words
+  // the quote never touches.
+  function overlapScore(quotedWords, candidateWords) {
+    if (!quotedWords.length) return 0;
+    const candidateSet = new Set(candidateWords);
+    const hits = quotedWords.filter(w => candidateSet.has(w)).length;
+    return hits / quotedWords.length;
+  }
+
+  // Looks for a quoted phrase (straight or curly double quotes) in the SAME
+  // clause immediately around a citation - mirrors checker.js's Arabic-run
+  // extraction in spirit (nearest text wins, don't reach across an
+  // unrelated citation), simplified to a single-citation local window since
+  // hadith citations appear far more sparsely in real AI text than Quran
+  // citations do (this project's own adversarial packed-citation test cases
+  // do not have a hadith analogue yet - if that changes, this should adopt
+  // the same global nearest-assignment + ambiguity-abstention algorithm
+  // checker.js's assignArabicRuns uses, not a per-citation window).
+  function findQuotedPhraseNear(text, citation, span) {
+    const start = Math.max(0, citation.start - span);
+    const end = Math.min(text.length, citation.end + span);
+    const window = text.slice(start, end);
+    const m = window.match(/[“"]([^”"]{15,400})[”"]/);
+    return m ? m[1].trim() : null;
+  }
+
+  async function searchHadeethEnc(phrase, language) {
+    const url = HADEETH_ENC_SEARCH_URL + '?phrase=' + encodeURIComponent(phrase) + '&language=' + language;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HadeethEnc search returned HTTP ' + res.status);
+    const data = await res.json();
+    return Array.isArray(data) ? data : []; // non-array shape ({suggestions:{...empty}}) means no real matches
+  }
+
+  // Tries the phrase as given, and if it contains no Arabic script, only
+  // searches English - HadeethEnc's `language` parameter is a real filter,
+  // not a hint, so guessing wrong returns confidently empty results for a
+  // phrase that may well exist in the OTHER language's corpus.
+  function detectLanguage(phrase) {
+    return /[؀-ۿ]/.test(phrase) ? 'ar' : 'en';
+  }
+
+  async function verifyQuotedPhrase(phrase) {
+    const language = detectLanguage(phrase);
+    const quotedWords = normalizeWords(phrase);
+    let results;
+    try {
+      results = await searchHadeethEnc(phrase, language);
+    } catch (e) {
+      return {
+        quotedPhrase: phrase,
+        status: 'lookup_failed',
+        verdict: null,
+        reason: 'Could not reach ' + HADEETH_ENC_SOURCE + ' to verify this quote (' + e.message + '). Not treated as a negative result - the check simply did not run.',
+        source: null,
+      };
+    }
+    if (!results.length) {
+      return {
+        quotedPhrase: phrase,
+        status: 'no_match',
+        verdict: null,
+        reason: 'No hadith matching this wording was found in ' + HADEETH_ENC_SOURCE + '. This does not by itself mean it is fabricated - only that this specific source does not corroborate the exact wording.',
+        source: HADEETH_ENC_SOURCE,
+      };
+    }
+    let best = null, bestScore = -1;
+    for (const r of results) {
+      const candidateWords = normalizeWords((r.hadith_text || r.hadeeth || '') + ' ' + (r.title || ''));
+      const score = overlapScore(quotedWords, candidateWords);
+      if (score > bestScore) { bestScore = score; best = r; }
+    }
+    if (bestScore >= PHRASE_MATCH_THRESHOLD) {
+      return {
+        quotedPhrase: phrase,
+        status: 'confirmed',
+        verdict: 'match',
+        matchedTitle: best.title,
+        matchScore: Math.round(bestScore * 100) / 100,
+        reason: 'A closely matching hadith was found in ' + HADEETH_ENC_SOURCE + ': "' + (best.title || '').slice(0, 120) + '"',
+        source: HADEETH_ENC_SOURCE,
+      };
+    }
+    return {
+      quotedPhrase: phrase,
+      status: 'no_confident_match',
       verdict: null,
-      reason: EXISTENCE_CHECK_REASON,
-      source: null,
-    }));
+      matchScore: Math.round(bestScore * 100) / 100,
+      reason: HADEETH_ENC_SOURCE + ' returned results for related words, but none closely matched this exact quote (best overlap ' + Math.round(bestScore * 100) + '%). Likely a paraphrase, a different hadith, or genuinely fabricated - this check alone cannot tell those apart.',
+      source: HADEETH_ENC_SOURCE,
+    };
+  }
+
+  // Deliberately does NOT read or forward any "grading" field from any
+  // source - see the hard boundary note at the top of this file. Every
+  // object this returns is asserted, by construction, to never carry a
+  // `grading` key at all (see hadith-checker.test.js).
+  //
+  // Now async: quoted-phrase verification is a real network call. Every
+  // citation still gets its collection+number stub result synchronously
+  // detected; the phrase check is layered on top only when a nearby quote
+  // is actually found.
+  async function checkHadithText(text) {
+    const citations = findHadithCitations(text);
+    const results = [];
+    for (const c of citations) {
+      const base = { ...c, status: EXISTENCE_CHECK_STATUS, verdict: null, reason: EXISTENCE_CHECK_REASON, source: null };
+      const quote = findQuotedPhraseNear(text, c, 250);
+      if (quote) {
+        base.quoteCheck = await verifyQuotedPhrase(quote);
+      }
+      results.push(base);
+    }
+    return results;
   }
 
   return {
     findHadithCitations,
     checkHadithText,
+    verifyQuotedPhrase,
     HADITH_EXISTENCE_CHECK_IMPLEMENTED,
+    HADEETH_ENC_SOURCE,
     init,
     HadithTextTooLongError,
     MAX_TEXT_LENGTH,

@@ -24,6 +24,7 @@ async function main() {
   console.log('[1] Tool discovery');
   const { tools } = await client.listTools();
   ok('check_quran_citation tool is registered', tools.some(t => t.name === 'check_quran_citation'));
+  ok('check_hadith_citation tool is registered', tools.some(t => t.name === 'check_hadith_citation'));
 
   console.log('\n[2] Valid + invalid citations in one call');
   const r1 = await client.callTool({
@@ -67,6 +68,27 @@ async function main() {
   const text5 = r5.content[0].text;
   ok('reports the input as too long, with the actual limit named', /200001/.test(text5) && /200000/.test(text5));
   ok('does NOT misreport an oversized input as simply "no citation detected"', !/No Quran citation detected/.test(text5));
+
+  console.log('\n[7] Hadith citation detection + reference stub, over the real MCP transport');
+  const r6 = await client.callTool({
+    name: 'check_hadith_citation',
+    arguments: { text: 'This is discussed in Sahih al-Bukhari 1234.' },
+  });
+  const text6 = r6.content[0].text;
+  ok('detects the citation', /Bukhari/.test(text6) && /1234/.test(text6));
+  ok('reference check is the honest not-yet-available stub, not a guessed verdict', /not yet available/i.test(text6) && /pending/i.test(text6));
+
+  console.log('\n[8] Hadith quoted-phrase verification via hadeethenc.com, over the real MCP transport (real network call)');
+  const r7 = await client.callTool({
+    name: 'check_hadith_citation',
+    arguments: { text: 'The Prophet said: "Actions are but by intentions" - Sahih al-Bukhari 1.' },
+  });
+  const text7 = r7.content[0].text;
+  ok('reports a quoted-wording verdict citing HadeethEnc', /Quoted wording/.test(text7) && /HadeethEnc/i.test(text7));
+
+  console.log('\n[9] No hadith citation present');
+  const r8 = await client.callTool({ name: 'check_hadith_citation', arguments: { text: 'Just a normal sentence.' } });
+  ok('reports no hadith citation detected', /No hadith citation detected/.test(r8.content[0].text));
 
   await client.close();
 

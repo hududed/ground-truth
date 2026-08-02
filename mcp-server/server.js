@@ -30,7 +30,10 @@ function requireCheckerFile(name) {
 global.window = global;
 requireCheckerFile('quran-data.js');
 requireCheckerFile('checker.js');
+requireCheckerFile('hadith-data.js');
+requireCheckerFile('hadith-checker.js');
 const checker = global.GroundTruthChecker;
+const hadithChecker = global.GroundTruthHadithChecker;
 
 function formatResult(r) {
   const lines = [`"${r.raw}"`];
@@ -53,6 +56,17 @@ function formatResult(r) {
     }
   } else {
     lines.push('  No Arabic quoted nearby - English paraphrase accuracy is not auto-checked (no single translation is canonical).');
+  }
+  return lines.join('\n');
+}
+
+function formatHadithResult(r) {
+  const lines = [`"${r.raw}"`];
+  lines.push(`  Detected: ${r.collection}${r.book ? ', Book ' + r.book : ''}, Hadith ${r.number}${r.subLetter || ''}${r.narrator ? ' (narrated by ' + r.narrator + ')' : ''}`);
+  lines.push(`  Reference check: ${r.reason}`);
+  if (r.quoteCheck) {
+    const qc = r.quoteCheck;
+    lines.push(`  Quoted wording "${qc.quotedPhrase}": ${qc.status.toUpperCase()} - ${qc.reason}`);
   }
   return lines.join('\n');
 }
@@ -91,6 +105,43 @@ server.registerTool(
       return { content: [{ type: 'text', text: 'No Quran citation detected in the given text.' }] };
     }
     const summary = results.map(formatResult).join('\n\n');
+    return { content: [{ type: 'text', text: summary }] };
+  }
+);
+
+server.registerTool(
+  'check_hadith_citation',
+  {
+    title: 'Check hadith citation',
+    description:
+      "Checks hadith citations in the given text. Two genuinely different things this does and does not do: (1) detects the citation (collection, number, narrator) but does NOT yet verify whether that specific collection+number reference exists - that needs sunnah.com/dorar.net data access, not yet available, and is reported honestly as such, never guessed. " +
+      '(2) if the hadith\'s wording is also quoted nearby, checks that exact phrase against hadeethenc.com\'s public search API (a real, live network call - the only one this project makes) and reports a scored, sourced verdict on whether that wording exists anywhere in that public encyclopedia. ' +
+      'Deterministic scoring, not an AI judgment call. Does not grade authenticity (sahih/hasan/da\'if), does not judge fiqh. ' +
+      'Call this on your own drafted response before showing a hadith citation to a user.',
+    inputSchema: {
+      text: z.string().describe('The text to scan for hadith citations, e.g. a drafted response quoting or referencing a hadith.'),
+    },
+  },
+  async ({ text }) => {
+    let results;
+    try {
+      results = await hadithChecker.checkHadithText(text);
+    } catch (e) {
+      if (e instanceof hadithChecker.HadithTextTooLongError) {
+        return {
+          content: [{
+            type: 'text',
+            text: 'Input is ' + e.length + ' characters, over the ' + hadithChecker.MAX_TEXT_LENGTH + '-character limit this tool checks. ' +
+              'Pass a shorter excerpt rather than the full text.',
+          }],
+        };
+      }
+      throw e;
+    }
+    if (!results.length) {
+      return { content: [{ type: 'text', text: 'No hadith citation detected in the given text.' }] };
+    }
+    const summary = results.map(formatHadithResult).join('\n\n');
     return { content: [{ type: 'text', text: summary }] };
   }
 );
