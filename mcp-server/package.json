@@ -1,7 +1,7 @@
 {
   "name": "@hududed/ground-truth-mcp",
-  "version": "0.1.1",
-  "description": "MCP server exposing Ground Truth's citation-fidelity engine as a tool for MCP-compatible AI clients (Claude Desktop, Claude Code, Cursor, etc). Checks whether an AI's Quran citation actually exists and matches the real text - deterministic, not an AI judgment call.",
+  "version": "0.2.0",
+  "description": "MCP server exposing Ground Truth's citation-fidelity engine as a tool for MCP-compatible AI clients (Claude Desktop, Claude Code, Cursor, etc). Checks whether an AI's Quran and hadith citations actually exist and match the real text - deterministic, not an AI judgment call.",
   "type": "commonjs",
   "main": "server.js",
   "bin": {
@@ -22,6 +22,7 @@
     "mcp",
     "model-context-protocol",
     "quran",
+    "hadith",
     "citation-checker",
     "fact-check"
   ],
