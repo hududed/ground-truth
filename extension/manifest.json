@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Ground Truth",
+  "version": "0.9.2",
+  "description": "Checks whether an AI's Quran citations exist and match the real Arabic text. Reference validity only, no tafsir or hadith yet.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["contextMenus", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://grok.com/*",
+    "https://www.google.com/search*",
+    "https://www.perplexity.ai/*",
+    "https://www.meta.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://grok.com/*",
+        "https://www.google.com/search*",
+        "https://www.perplexity.ai/*",
+        "https://www.meta.ai/*"
+      ],
+      "js": ["quran-data.js", "checker.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ground Truth",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  }
+}

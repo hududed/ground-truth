@@ -1,0 +1,66 @@
+name: Edge case report
+description: An AI got a Quran citation wrong (or Ground Truth flagged something confusingly). No coding knowledge needed.
+title: "[edge case] "
+labels: ["edge-case"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a real case instead of a hypothetical one - this is exactly how this project actually improves. You don't need to know how the checker works internally. See `CONTRIBUTING.md` for what happens after you submit this.
+
+  - type: input
+    id: platform
+    attributes:
+      label: Which AI platform?
+      description: e.g. ChatGPT, Claude, Gemini, Google AI Mode, Perplexity, Meta AI, Grok
+      placeholder: "Google AI Mode"
+    validations:
+      required: true
+
+  - type: textarea
+    id: prompt
+    attributes:
+      label: The exact prompt you used
+      description: Copy-paste it exactly. Small wording differences can matter.
+      placeholder: "quote me a random quran verse"
+    validations:
+      required: true
+
+  - type: textarea
+    id: response
+    attributes:
+      label: The AI's exact response
+      description: Paste the exact text if you can - it's easier to reproduce from than a screenshot. If pasting isn't convenient, attach a FULL-SCREEN screenshot instead (drag an image into this box) - not just a crop of the answer, the whole window helps confirm what site this was and what else was visible.
+      placeholder: "Paste the response text here, or drag a screenshot image into this box."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-vs-actual
+    attributes:
+      label: What did Ground Truth show, and what did you expect instead?
+      description: Did it miss a citation entirely? Flag something wrong as valid, or something valid as wrong? Show a confusing result? If you have DevTools open and can share the [GROUND TRUTH] console lines, that helps too, but isn't required.
+      placeholder: "It showed a green checkmark, but I think the citation was actually wrong because..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: What kind of issue is this, best guess (fine to leave as "not sure")
+      options:
+        - Not sure
+        - Reference doesn't exist but wasn't flagged
+        - Citation format wasn't detected at all
+        - Arabic text quoted doesn't match, but wasn't flagged
+        - Surah name and number seem to disagree
+        - Something about English translation accuracy (see note below)
+        - Something about hadith (see note below)
+        - Other
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **Note:** English-translation-quality and hadith-grading reports are still valuable to file, but per `CONTRIBUTING.md`'s governance rule, those require a qualified scholar's review before anything gets built or fixed - they'll be labelled and queued, not closed.

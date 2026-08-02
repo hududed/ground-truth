@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ground Truth</title>
+<style>
+  body { width: 340px; font-family: -apple-system, system-ui, sans-serif; background: #FAF9F6; color: #1A1A1A; margin: 0; padding: 16px; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.sub { font-size: 11px; color: #6B6B6B; margin: 0 0 12px; }
+  textarea { width: 100%; box-sizing: border-box; font-size: 12px; padding: 8px; border: 1px solid #E7E1D6; border-radius: 8px; resize: vertical; }
+  button { margin-top: 8px; background: #5F7A6E; color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+  #results { margin-top: 12px; max-height: 320px; overflow-y: auto; }
+  .row { border-top: 1px solid #E7E1D6; padding: 8px 0; font-size: 12px; }
+  .badge { border-radius: 6px; padding: 2px 6px; font-size: 10px; color: white; white-space: nowrap; }
+  .arabic { direction: rtl; font-size: 14px; margin-top: 4px; line-height: 1.6; }
+  .hint { color: #6B6B6B; font-size: 11px; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <h1>Ground Truth</h1>
+  <p class="sub">Paste text to check Quran citations. Or right-click any selected text on a page and choose "Check with Ground Truth."</p>
+  <textarea id="input" rows="4" placeholder="Paste AI-generated text..."></textarea>
+  <button id="check">Check citations</button>
+  <div id="results"></div>
+  <div class="hint">Reference validity + Arabic exact-match only. Hadith checking not yet available.</div>
+  <script src="quran-data.js"></script>
+  <script src="checker.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

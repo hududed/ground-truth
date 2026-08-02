@@ -1,0 +1,16 @@
+.DS_Store
+node_modules/
+*.log
+.e2e-screenshots/
+*.zip
+.env
+.env.*
+!.env.example
+.npmrc
+.netrc
+*.pem
+*.key
+dist/
+build/
+coverage/
+mcp-server/vendor/
