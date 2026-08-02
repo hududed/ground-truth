@@ -80,7 +80,7 @@ server.registerTool(
     description:
       "Checks whether Quran citations in the given text actually exist and, if Arabic is quoted, whether it matches the real canonical text (Tanzil Project's Uthmani text, CC BY 3.0). " +
       'Deterministic - a fixed lookup against licensed source text, not an AI judgment call. Does not check hadith, does not judge tafsir or fiqh, does not score English paraphrase accuracy. ' +
-      'Call this on your own drafted response before showing a Quran citation to a user, to catch a wrong reference or altered Arabic before it ships.',
+      'Use this any time a Quran reference needs checking: call it on your own drafted response before showing a citation to a user, or when the user pastes or quotes text themselves and asks you to check, verify, or fact-check the citation(s) in it - phrases like "check these citations", "is this verse real", or "verify this quote" all mean call this tool on the given text.',
     inputSchema: {
       text: z.string().describe('The text to scan for Quran citations, e.g. a drafted response quoting or referencing a verse.'),
     },
@@ -117,7 +117,7 @@ server.registerTool(
       "Checks hadith citations in the given text. Two genuinely different things this does and does not do: (1) detects the citation (collection, number, narrator) but does NOT yet verify whether that specific collection+number reference exists - that needs sunnah.com/dorar.net data access, not yet available, and is reported honestly as such, never guessed. " +
       '(2) if the hadith\'s wording is also quoted nearby, checks that exact phrase against hadeethenc.com\'s public search API (a real, live network call - the only one this project makes) and reports a scored, sourced verdict on whether that wording exists anywhere in that public encyclopedia. ' +
       'Deterministic scoring, not an AI judgment call. Does not grade authenticity (sahih/hasan/da\'if), does not judge fiqh. ' +
-      'Call this on your own drafted response before showing a hadith citation to a user.',
+      'Use this any time a hadith citation needs checking: call it on your own drafted response before showing a citation to a user, or when the user pastes or quotes text themselves and asks you to check, verify, or fact-check a hadith in it.',
     inputSchema: {
       text: z.string().describe('The text to scan for hadith citations, e.g. a drafted response quoting or referencing a hadith.'),
     },
