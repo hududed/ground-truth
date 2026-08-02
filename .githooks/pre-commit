@@ -1,0 +1,48 @@
+#!/bin/sh
+# Second guardrail layer, local and opt-in - GitHub's own secret scanning
+# (enabled on this repo) is the first layer and catches generic secret
+# patterns server-side, after a push. This catches BEFORE a commit even
+# happens, and adds a category GitHub's scanner doesn't cover at all:
+# personal absolute paths and internal-planning-doc breadcrumbs that aren't
+# secrets but shouldn't be in a public repo either (see the real instance
+# fixed in commit history: source comments pointing at a private
+# drafts/ground-truth/.lavish/ planning path).
+#
+# Setup (once, per clone): git config core.hooksPath .githooks
+
+set -e
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -v '^\.githooks/')
+[ -z "$staged_files" ] && exit 0
+
+fail=0
+
+check_pattern() {
+    label="$1"
+    pattern="$2"
+    hits=$(echo "$staged_files" | xargs -I{} sh -c 'git show ":{}" 2>/dev/null | grep -InE "'"$pattern"'" | sed "s|^|{}:|"' 2>/dev/null || true)
+    if [ -n "$hits" ]; then
+        echo "BLOCKED - $label:"
+        echo "$hits" | sed 's/^/  /'
+        echo ""
+        fail=1
+    fi
+}
+
+# Personal absolute paths (macOS/Linux home directories)
+check_pattern "personal home-directory path" "/Users/[A-Za-z0-9_.-]+/|/home/[A-Za-z0-9_.-]+/"
+
+# Internal-planning-doc breadcrumbs - this project's private notes live in a
+# separate, non-public repo; a public source file should never point at it.
+check_pattern "internal planning-doc reference" "drafts/ground-truth|\\.lavish/|mm-cli|v1-build-plan"
+
+# Common secret-token shapes, as defense in depth alongside GitHub's own scan
+check_pattern "likely API key/token" "sk-ant-[A-Za-z0-9_-]{10,}|sk-proj-[A-Za-z0-9_-]{10,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}"
+check_pattern "private key block" "-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----"
+
+if [ "$fail" -ne 0 ]; then
+    echo "Commit blocked by .githooks/pre-commit. Fix the lines above, or if this is a genuine false positive, commit with --no-verify (only after re-checking by eye)."
+    exit 1
+fi
+
+exit 0

@@ -1,5 +1,15 @@
 # Contributing edge cases
 
+## Before you commit anything
+
+This repo enables GitHub's secret scanning + push protection server-side. Locally, there's a second, opt-in guardrail in `.githooks/pre-commit` that catches a category GitHub's scanner doesn't: personal absolute paths and internal-planning-doc references that shouldn't leak into a public repo, plus common secret-token shapes as defense in depth. Turn it on once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It only checks what's actually staged, runs in well under a second, and blocks the commit with the offending lines printed if it finds something.
+
 The fastest way this project gets better is people finding real cases where an AI got a Quran citation wrong (or right, in a way this tool got wrong) and reporting it. You do not need to know how to code. You do not need to know how the checker works internally. You need three things: the prompt you used, the exact response you got, and which platform it was on.
 
 ## How to report an edge case
@@ -42,3 +52,7 @@ Concretely, this means:
 **Not yet actionable:** "The AI seemed wrong somewhere" with no exact text. The automation (and any human following up) needs the literal input to reproduce against - a vague description can't become a regression test.
 
 **Out of scope for now, but still worth filing** (labelled and set aside, not closed as invalid): anything about English-translation quality/nuance, tafsir interpretation, or hadith grading. These require a scholar's involvement per the governance rule above - filing them now still builds the queue for when that capacity exists.
+
+## If you're a scholar, or GitHub isn't your thing
+
+The governance rule above means real progress on hadith grading, fiqh, or tafsir is gated on a named, qualified scholar reviewing and signing off on a small batch of items in writing - not a GitHub workflow requirement, an actual one. If that's you, or you know someone, you don't need a GitHub account to help: email **support@multimodeai.com** directly and it'll reach a real person. Same address for engineers who'd rather discuss the sunnah.com/dorar.net integration before opening a PR.

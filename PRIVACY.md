@@ -35,3 +35,7 @@ The MCP server (`mcp-server/`) is a separate component from the browser extensio
 ## Changes
 
 If this changes further - for example, once sunnah.com/dorar.net access is granted for collection+number verification - this file gets updated first, and the change gets named plainly, not buried.
+
+## Contact
+
+Questions about this policy, or anything else: support@multimodeai.com.

@@ -7,12 +7,11 @@
 // contains no hadith text, no numbering ranges, no grading, and cannot be
 // used to check whether any specific hadith actually exists - that requires
 // a real licensed source (sunnah.com, dorar.net), which this project does
-// not have access to yet. See drafts/ground-truth/.lavish/v1-build-plan.html
-// for the outreach status.
+// not have access to yet. See the README's Roadmap section for the
+// outreach status.
 //
 // `name` is the canonical display label used in every detected citation and
-// every user-facing message - one spelling per collection, chosen to match
-// the labels already used in the v1 build plan.
+// every user-facing message - one spelling per collection.
 //
 // `variants` is every spelling this project has actually seen an AI use for
 // that collection, including alternate transliterations (Dawud/Dawood),

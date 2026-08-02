@@ -41,8 +41,21 @@ node test.js   # spawns the real server as a subprocess, calls it via the actual
 
 To point Claude Desktop/Code at your local checkout instead of the published package, use `"command": "node", "args": ["/absolute/path/to/ground-truth/mcp-server/server.js"]` in place of the `npx` line above.
 
-## The one tool this exposes
+## The tools this exposes
 
-`check_quran_citation(text)` - scans the given text for Quran citations and returns, per citation: whether the reference exists, the canonical Arabic text and its source, whether any quoted Arabic matches exactly (with a word-level explanation if not), and whether the surah name and a stated number disagree.
+- `check_quran_citation(text)` - scans the given text for Quran citations and returns, per citation: whether the reference exists, the canonical Arabic text and its source, whether any quoted Arabic matches exactly (with a word-level explanation if not), and whether the surah name and a stated number disagree.
+- `check_hadith_citation(text)` - scans for hadith citations (e.g. "Sahih al-Bukhari, Hadith 1"). Two genuinely different questions, two different answers: confirming the specific collection+number reference is still an honest `not_yet_available` stub (needs sunnah.com/dorar.net access, not yet granted); if the AI also quoted the hadith's wording nearby, that exact phrase gets checked live against HadeethEnc.com's public search API and returns a real, scored verdict (`confirmed` / `no_confident_match` / `no_match` / `lookup_failed`) - see `extension/hadith-checker.js` for the scoring discipline.
 
-Same hard boundary as everything else in this project: no hadith, no fiqh, no tafsir, no scoring of English paraphrase accuracy. This tool answers "does this citation check out against a fixed, licensed source," never "is this interpretation correct."
+Same hard boundary as everything else in this project: no fiqh, no tafsir, no hadith grading, no scoring of English paraphrase accuracy. These tools answer "does this citation check out against a fixed, licensed source," never "is this interpretation correct."
+
+## Manual QA (no MCP client needed)
+
+To sanity-check the hadith checker directly against arbitrary text, without setting up Claude Desktop/Code or any MCP client:
+
+```bash
+node test/manual-check-hadith.js "The Prophet said, \"Actions are but by intentions\" (Sahih al-Bukhari, Hadith 1)"
+```
+
+Prints exactly what the checker detected (collection, number, narrator) and the real, live HadeethEnc verdict on any quoted wording, with the reason spelled out. Also works piped: `echo "..." | node test/manual-check-hadith.js`.
+
+To QA it end-to-end through the actual MCP transport instead (closer to how a real client uses it): `node mcp-server/test.js` spawns the real server as a subprocess and calls it over real stdio, or configure a live client (see Install above) and ask it to quote a hadith, then ask it to check that citation with Ground Truth.

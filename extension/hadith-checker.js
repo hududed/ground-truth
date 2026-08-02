@@ -27,7 +27,7 @@
 // see the section below for the (deliberately conservative) scoring logic
 // and exactly what it can and can't tell you.
 //
-// See drafts/ground-truth/.lavish/v1-build-plan.html for the fuller status.
+// See the README's Roadmap section for the fuller status.
 // ---------------------------------------------------------------------------
 
 window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
@@ -244,10 +244,9 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
   // corpus is available yet for hadith the way Tanzil's is for Quran.
   //
   // Source: hadeethenc.com's public, keyless JSON API (confirmed free, no
-  // auth, no rate-limit wall hit in testing - see
-  // drafts/ground-truth/.lavish/v1-build-plan.html for how this was found
-  // and verified). This is the FIRST live network call this project makes
-  // anywhere - see PRIVACY.md for the honest disclosure of what that means.
+  // auth, no rate-limit wall hit in manual testing). This is the FIRST live
+  // network call this project makes anywhere - see PRIVACY.md for the
+  // honest disclosure of what that means.
   // ---------------------------------------------------------------------
 
   const HADEETH_ENC_SOURCE = "HadeethEnc.com (Hadith Encyclopedia)";
@@ -267,6 +266,54 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
   // signal doesn't actually have.
   const PHRASE_MATCH_THRESHOLD = 0.6;
 
+  // Pure linguistic function words, filtered out of the QUOTED phrase before
+  // scoring (never from the candidate - the candidate is only ever used as a
+  // membership set). Found necessary during manual QA, not speculative: a
+  // real 15-word quote ("Actions are but by intentions, and every man shall
+  // have only that which he intended.") scored 87% overlap against a
+  // completely unrelated, much longer hadith (Ka'b ibn Malik's story of
+  // missing the battle of Tabuk) - every one of the 13 matched words was a
+  // stopword on this list, and the two words that actually carry the quote's
+  // meaning ("actions", "intentions") were NOT present in that unrelated text
+  // at all. Without this filter, any short quote heavy on ordinary grammar
+  // can falsely "confirm" against any sufficiently long candidate, purely by
+  // chance, which is exactly the false-confidence failure mode this checker
+  // exists to catch elsewhere. Deliberately English-only: no stopword list
+  // here has been verified against real Arabic hadith text, so Arabic
+  // scoring stays unfiltered - a known, disclosed gap, not a silent guess.
+  const ENGLISH_STOPWORDS = new Set([
+    'a', 'an', 'the', 'and', 'but', 'or', 'if', 'so', 'as', 'at', 'by', 'for', 'from',
+    'in', 'into', 'of', 'on', 'to', 'with', 'is', 'was', 'were', 'are', 'be', 'been',
+    'being', 'has', 'have', 'had', 'do', 'does', 'did', 'i', 'you', 'he', 'she', 'it',
+    'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our',
+    'their', 'this', 'that', 'these', 'those', 'who', 'whom', 'which', 'what', 'when',
+    'where', 'why', 'how', 'not', 'no', 'only', 'than', 'then', 'there', 'here',
+    'shall', 'will', 'would', 'should', 'can', 'could', 'may', 'might', 'must', 'every',
+    'each', 'all', 'any', 'some', 'one',
+  ]);
+
+  // A second, DOMAIN-specific list - not grammar, but narration boilerplate
+  // that HadeethEnc's own corpus repeats in nearly every single entry (every
+  // hadith_text there is some variant of "[Narrator] reported that the
+  // Messenger of Allah (may Allah's peace and blessings be upon him) said:
+  // ..."). Also found during manual QA: after the stopword filter above,
+  // the bare quote "the Prophet said" still confirmed at 100% overlap
+  // against an arbitrary, unrelated hadith - "prophet" and "said" survive
+  // ENGLISH_STOPWORDS (they are real content words in the ordinary sense)
+  // but do not distinguish ONE hadith from another, since virtually every
+  // hadith contains them. Filtering these too means "content words" tracks
+  // what's actually distinctive about a given quote, not just what's
+  // grammatically a noun/verb.
+  const HADITH_BOILERPLATE_WORDS = new Set([
+    'prophet', 'messenger', 'allah', 'said', 'reported', 'narrated',
+    'peace', 'blessings', 'upon', 'him',
+  ]);
+
+  // Below this many CONTENT words (post-filter), a quote cannot be scored
+  // reliably no matter what ratio comes out - a 0- or 1-content-word quote
+  // does not carry enough distinctive signal to confirm anything against.
+  const MIN_CONTENT_WORDS_FOR_CONFIRM = 2;
+
   function normalizeWords(s) {
     return s
       .toLowerCase()
@@ -274,6 +321,11 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
       .replace(/[^\p{L}\p{N}\s]/gu, ' ') // punctuation-insensitive, Unicode-aware (Arabic + English)
       .split(/\s+/)
       .filter(Boolean);
+  }
+
+  function contentWords(words, language) {
+    if (language !== 'en') return words;
+    return words.filter(w => !ENGLISH_STOPWORDS.has(w) && !HADITH_BOILERPLATE_WORDS.has(w));
   }
 
   // Fraction of the QUOTED phrase's own words found in the candidate text -
@@ -323,7 +375,7 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
 
   async function verifyQuotedPhrase(phrase) {
     const language = detectLanguage(phrase);
-    const quotedWords = normalizeWords(phrase);
+    const quotedWords = contentWords(normalizeWords(phrase), language);
     let results;
     try {
       results = await searchHadeethEnc(phrase, language);
@@ -351,7 +403,7 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
       const score = overlapScore(quotedWords, candidateWords);
       if (score > bestScore) { bestScore = score; best = r; }
     }
-    if (bestScore >= PHRASE_MATCH_THRESHOLD) {
+    if (bestScore >= PHRASE_MATCH_THRESHOLD && quotedWords.length >= MIN_CONTENT_WORDS_FOR_CONFIRM) {
       return {
         quotedPhrase: phrase,
         status: 'confirmed',
@@ -362,12 +414,15 @@ window.GroundTruthHadithChecker = window.GroundTruthHadithChecker || (() => {
         source: HADEETH_ENC_SOURCE,
       };
     }
+    const reason = quotedWords.length < MIN_CONTENT_WORDS_FOR_CONFIRM
+      ? 'This quote has too few distinctive words (after removing ordinary grammar like "the"/"and"/"which") to score reliably against ' + HADEETH_ENC_SOURCE + ' - too short a signal to confirm or rule out.'
+      : HADEETH_ENC_SOURCE + ' returned results for related words, but none closely matched this exact quote (best overlap ' + Math.round(bestScore * 100) + '%). Likely a paraphrase, a different hadith, or genuinely fabricated - this check alone cannot tell those apart.';
     return {
       quotedPhrase: phrase,
       status: 'no_confident_match',
       verdict: null,
       matchScore: Math.round(bestScore * 100) / 100,
-      reason: HADEETH_ENC_SOURCE + ' returned results for related words, but none closely matched this exact quote (best overlap ' + Math.round(bestScore * 100) + '%). Likely a paraphrase, a different hadith, or genuinely fabricated - this check alone cannot tell those apart.',
+      reason,
       source: HADEETH_ENC_SOURCE,
     };
   }

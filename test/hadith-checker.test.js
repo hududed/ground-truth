@@ -14,8 +14,8 @@
 // tested here: quoted-phrase verification against hadeethenc.com's public
 // search API (section 6b) - a genuinely different, narrower question ("does
 // this wording exist anywhere") than the still-stubbed one ("is this
-// specifically hadith #N in this collection"). See
-// drafts/ground-truth/.lavish/v1-build-plan.html for the fuller status.
+// specifically hadith #N in this collection"). See the README's Roadmap
+// section for the fuller status.
 
 const path = require('path');
 
@@ -54,7 +54,7 @@ function assertEqual(actual, expected, msg) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Format variants named directly in the v1 build plan
+// 1. Real-world format variants
 // ---------------------------------------------------------------------------
 
 check('plain "Collection N" form: "Sahih al-Bukhari 1234"', () => {
@@ -344,6 +344,27 @@ check('verifyQuotedPhrase directly: Arabic quote is detected and searched in Ara
   const r = await C.verifyQuotedPhrase('إنما الأعمال بالنيات');
   if (r.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + r.reason);
   if (!['confirmed', 'no_confident_match', 'no_match'].includes(r.status)) throw new Error('unexpected status: ' + r.status);
+});
+
+// Regression test for a real false positive found during manual QA (see
+// test/manual-check-hadith.js): this exact 15-word quote used to score 87%
+// overlap against Ka'b ibn Malik's completely unrelated story hadith,
+// because 13 of the 15 quoted words were ordinary stopwords ("are", "but",
+// "by", "and", "which", "he"...) that any sufficiently long English hadith
+// contains by coincidence - while the two words that actually carry the
+// quote's meaning, "actions" and "intentions", were NOT in that unrelated
+// text at all. Fixed by scoring only content words. This must never again
+// report "confirmed" against an unrelated hadith.
+check('stopword-heavy quote does not falsely "confirm" against an unrelated hadith', async () => {
+  const r = await C.verifyQuotedPhrase('Actions are but by intentions, and every man shall have only that which he intended.');
+  if (r.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + r.reason);
+  assertEqual(r.status !== 'confirmed', true, 'a stopword-dominated overlap must never count as a confirmed match');
+});
+
+check('a quote with fewer than 2 content words is never confirmed, regardless of raw score', async () => {
+  const r = await C.verifyQuotedPhrase('the Prophet said');
+  if (r.status === 'lookup_failed') throw new Error('network lookup failed - not a logic bug, but re-run: ' + r.reason);
+  assertEqual(r.status, 'no_confident_match', 'too few content words to score reliably - must abstain, not guess');
 });
 
 // ---------------------------------------------------------------------------
