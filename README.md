@@ -1,20 +1,23 @@
 # Ground Truth
 
-Checks whether an AI actually got your Quran citation right: does the reference exist, and does any quoted Arabic match the real text. The name is a wink at the machine-learning term for the verified-correct answer - the discipline underneath it is tabayyun (Quran 49:6): verify the claim, especially the confident one.
+Checks whether an AI actually got your Quran or hadith citation right: does the reference exist, and does any quoted text match the real source. The name is a wink at the machine-learning term for the verified-correct answer - the discipline underneath it is tabayyun (Quran 49:6): verify the claim, especially the confident one.
+
+![Ground Truth graphical abstract: an AI response is checked against Tanzil (Quran) and HadeethEnc (hadith wording), producing an inline verdict](docs/graphical-abstract.png)
 
 **Status:** early working prototype (check `extension/manifest.json` for the current version - status notes here go stale fast, the manifest doesn't). Not published to any extension store yet - load unpacked for now.
 
 ## What it does
 
 - **Reference validity** - catches citations that don't exist (e.g. "Quran 2:290" when Al-Baqarah only has 286 ayat).
-- **Arabic exact-match** - if Arabic text is quoted alongside a citation, diffs it (diacritic-insensitive) against the real Tanzil Uthmani text.
-- **Does not** check hadith yet (no licensed data source confirmed), does not judge tafsir or fiqh, does not auto-score an English paraphrase (no single translation is canonical, so that would be a fabricated judgment).
+- **Arabic exact-match** - if Arabic text is quoted alongside a Quran citation, diffs it (diacritic-insensitive) against the real Tanzil Uthmani text.
+- **Hadith wording check** - if a hadith's wording is quoted nearby, checks that exact phrase against HadeethEnc's public Hadith Encyclopedia (a real, live lookup - the one network call this project makes, see `PRIVACY.md`).
+- **Does not** yet confirm a specific hadith collection+number reference (e.g. "is this really Bukhari #1234") - that needs sunnah.com/dorar.net access, not yet granted. Does not judge tafsir or fiqh, does not auto-score an English paraphrase (no single translation is canonical, so that would be a fabricated judgment).
 
 ## Roadmap
 
 v1 ships two checks today, both already working in the extension: does the Quran reference actually exist, and does any quoted Arabic match the real text.
 
-The next thing planned for v1 is hadith existence and attribution: checking whether a cited hadith exists in a named canonical collection, cross-referenced against sunnah.com and dorar.net. This isn't built yet. The contact details and access terms for both sources have already been researched; the actual request for API access just hasn't been sent.
+Hadith checking is half-built: if a hadith's wording is quoted, that phrase gets checked live against HadeethEnc's public encyclopedia today. What's still missing is confirming a specific collection-and-number reference (is this really Bukhari's hadith #1234) - that needs sunnah.com/dorar.net's own numbering data, which access has been requested for but not yet granted.
 
 Past that, everything sits in v2+, and it's gated behind something no amount of engineering can substitute for: hasan/da'if grading nuance, fiqh rulings, tafsir or interpretation, isnad/rijal chain authentication, and fatwa-humility scoring all require a named, qualified scholar to review and sign off on the specific items before any of it ships. That's not caution for its own sake. A citation checker that quietly starts grading hadith authenticity or weighing in on fiqh stops being a citation checker - it becomes an accidental claim to religious authority, without anyone deciding that on purpose. v1 sidesteps this entirely by only diffing against sources everyone already treats as canonical. v2 doesn't get to skip the same discipline just because it's harder to build around.
 
@@ -31,8 +34,10 @@ If you're a scholar willing to sanity-check a small, narrow set of items (does t
 
 ## The hard boundary
 
-No hadith grading, no fiqh ruling, no tafsir, and no fatwa-humility scoring gets built or shipped without a named, qualified scholar reviewing and signing off on the specific items in writing, first, every time. This project generates zero new religious ground truth on its own; it only checks against sources that are already public and already authoritative (Tanzil for Quran text; a confirmed, licensed hadith source, not yet secured, for hadith).
+No hadith grading, no fiqh ruling, no tafsir, and no fatwa-humility scoring gets built or shipped without a named, qualified scholar reviewing and signing off on the specific items in writing, first, every time. This project generates zero new religious ground truth on its own; it only checks against sources that are already public and already authoritative (Tanzil for Quran text; HadeethEnc's public encyclopedia for hadith wording; sunnah.com/dorar.net, access requested but not yet granted, for hadith collection+number verification).
 
-## License note on bundled data
+## License
 
-`extension/quran-data.js` and `data/tanzil-uthmani-raw.txt` are the Tanzil Project's Uthmani Quran text, Creative Commons Attribution 3.0. Redistributed here per Tanzil's terms: verbatim, unaltered, with attribution.
+This project's own code is licensed under FSL-1.1-MIT (see `LICENSE`) - free to use, modify, and redistribute for any purpose other than launching a directly competing commercial product or service, converting automatically to plain MIT two years after each version is released.
+
+`extension/quran-data.js` and `data/tanzil-uthmani-raw.txt` are the Tanzil Project's Uthmani Quran text, Creative Commons Attribution 3.0, unrelated to the above - redistributed here per Tanzil's own terms: verbatim, unaltered, with attribution.
